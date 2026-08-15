@@ -1,4 +1,3 @@
-Project README
 📁 Project Structure
 The overall file structure of this project is as follows:
 .
