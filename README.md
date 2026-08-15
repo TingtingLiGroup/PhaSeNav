@@ -74,4 +74,3 @@ python Sae_classify.py
 
 If you have any questions, bugs or optimization suggestions during use, please submit an **Issue** in this repository\.
 
-> （注：部分内容可能由 AI 生成）
