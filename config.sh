@@ -1,86 +1,141 @@
 #!/bin/bash
 
 # =============================================================================
-# Global settings
+# Project root
 # =============================================================================
+
+DATASET_ROOT="./dataset"
+
+# Use an absolute path if run.sh may be called from different directories.
+# For example:
+# DATASET_ROOT="/mnt/data/fcc/binary_ESM/dataset"
+
 DEVICE="cuda:1"
 FEATURE_DIM=40960
 
-# =============================================================================
-# Step 1: ESM extraction
-# =============================================================================
-JSON_FILE="/mnt/data/fcc/binary_ESM/negtive_seg_select/mut_appended_sequences.json"
-LABEL_CATEGORY_FILE="label_categories_uniprot_CDCODE_phasepdb_20250724.json"
 
-STEP1_TRAIN_SAVE_DIR="./my_saved_tensors/train"
-STEP1_TEST_SAVE_DIR="./my_saved_tensors/test"
+# =============================================================================
+# Input files
+# =============================================================================
 
-STEP1_ESM_BATCH_SIZE=100
-STEP1_TRAIN_MAX_LENGTH=3072
-STEP1_TEST_MAX_LENGTH=2900
+INPUT_DIR="${DATASET_ROOT}/input"
+CHECKPOINT_DIR="${DATASET_ROOT}/checkpoints"
+
+SEQUENCE_JSON="${INPUT_DIR}/mut_appended_sequences.json"
+
+LABEL_CATEGORY_FILE="${INPUT_DIR}/label_categories_uniprot_CDCODE_phasepdb_20250724.json"
+
+LABEL_MAPPING_FILE="${INPUT_DIR}/label_categories_proteins_with_PolyG_split.json"
+
+NEW_CONSTITUTIVE_SEQUENCE_JSON="${INPUT_DIR}/new_constitutive_sequences.json"
+
+SAE_CHECKPOINT="${CHECKPOINT_DIR}/step_80000.pt"
+
+
+# =============================================================================
+# encode
+#
+# This stage combines:
+#   1. ESM representation extraction
+#   2. SAE sparse feature encoding
+# =============================================================================
+
+ENCODE_DIR="${DATASET_ROOT}/encoded"
+
+ENCODE_TENSOR_DIR="${ENCODE_DIR}/tensors"
+ENCODE_PROTEIN_REP_DIR="${ENCODE_DIR}/protein_reps"
+
+ENCODE_TRAIN_TENSORS="${ENCODE_TENSOR_DIR}/train_tensors.pt"
+ENCODE_TEST_TENSORS="${ENCODE_TENSOR_DIR}/test_tensors.pt"
+
+ENCODE_TRAIN_PT_DIR="${ENCODE_PROTEIN_REP_DIR}/train"
+ENCODE_TEST_PT_DIR="${ENCODE_PROTEIN_REP_DIR}/test"
+
+ENCODE_NEW_CONSTITUTIVE_PT_DIR="${ENCODE_PROTEIN_REP_DIR}/new_constitutive"
+
+ENCODE_ESM_BATCH_SIZE=100
+ENCODE_SAE_BATCH_SIZE=64
+
+ENCODE_TRAIN_MAX_LENGTH=3072
+ENCODE_TEST_MAX_LENGTH=2900
+
+ENCODE_SAVE_EVERY=500
 
 RUN_TRAIN_ESM=1
 RUN_TEST_ESM=1
 
-# =============================================================================
-# Step 2: SAE sparsification
-# =============================================================================
-SAE_CHECKPOINT="step_80000.pt"
-
-STEP2_TRAIN_TENSORS="./my_saved_tensors/train/train_tensors.pt"
-STEP2_TEST_TENSORS="./my_saved_tensors/test/test_tensors.pt"
-
-STEP2_TRAIN_PT_DIR="./protein_reps/train"
-STEP2_TEST_PT_DIR="./protein_reps/test"
-
-STEP2_SAE_BATCH_SIZE=64
-STEP2_SAVE_EVERY=500
-
 RUN_TRAIN_SAE=1
 RUN_TEST_SAE=1
 
-# =============================================================================
-# Step 3: Train + test together
-# =============================================================================
-STEP3_TRAIN_TENSORS="./polyG/batch_full_results_20260521/my_saved_tensors/3072/train_tensors.pt"
-STEP3_TEST_TENSORS="./my_saved_tensors/uniprot&CDCODE&phasepdb_20250724/3072/test_tensors.pt"
-
-STEP3_TRAIN_PT_DIR="./polyG/batch_full_results_20260521/protein_reps_polyg_pt/train"
-STEP3_TEST_PT_DIR="./protein_reps_uniprot&CDCODE&phasepdb_20250724_pt/test"
-
-STEP3_LABEL_MAPPING_FILE="label_categories_proteins_with_PolyG_split.json"
-STEP3_GROUP_NAME="PolyG"
-
-STEP3_MAX_ITERATIONS=10
-STEP3_FINAL_FEATURE_NUM=3000
-STEP3_LR=0.0001
-STEP3_BASE_LAMBDA_L1=0.000001
-
-STEP3_OUTPUT_DIR="./final_test_results_class_20260522_PolyG"
 
 # =============================================================================
-# Step 4: Standalone evaluation
+# train+test
+#
+# Dynamic feature selection, classifier training, and test evaluation
 # =============================================================================
-STEP4_TEST_TENSORS="./my_saved_tensors/uniprot&CDCODE&phasepdb_20250724/3072/test_tensors.pt"
-STEP4_TEST_PT_DIR="./protein_reps_uniprot&CDCODE&phasepdb_20250724_pt/test"
 
-STEP4_SELECTED_FEATURES_DIR="./final_results_20250724"
-STEP4_MODEL_ROOT="./dynamic_feature_models/iteration_8"
+TRAIN_TEST_DIR="${DATASET_ROOT}/train_test"
 
-# Multiple class IDs can be set here, separated by spaces
-STEP4_CLASS_IDS=(13)
+TRAIN_TEST_SELECTED_FEATURES_DIR="${TRAIN_TEST_DIR}/selected_features"
+TRAIN_TEST_MODEL_DIR="${TRAIN_TEST_DIR}/models"
+TRAIN_TEST_METRICS_DIR="${TRAIN_TEST_DIR}/metrics"
 
-STEP4_OUTPUT_DIR="./step4_outputs"
+TRAIN_TEST_TRAIN_TENSORS="${ENCODE_TRAIN_TENSORS}"
+TRAIN_TEST_TEST_TENSORS="${ENCODE_TEST_TENSORS}"
+
+TRAIN_TEST_TRAIN_PT_DIR="${ENCODE_TRAIN_PT_DIR}"
+TRAIN_TEST_TEST_PT_DIR="${ENCODE_TEST_PT_DIR}"
+
+TRAIN_TEST_GROUP_NAME="PolyG"
+
+TRAIN_TEST_MAX_ITERATIONS=10
+TRAIN_TEST_FINAL_FEATURE_NUM=3000
+TRAIN_TEST_LR=0.0001
+TRAIN_TEST_BASE_LAMBDA_L1=0.000001
+
+TRAIN_TEST_OUTPUT_DIR="${TRAIN_TEST_DIR}/outputs"
+
 
 # =============================================================================
-# Step 5: Review protein prediction
+# test
+#
+# Standalone evaluation using saved selected features and trained models
 # =============================================================================
-STEP5_SELECTED_FEATURES_CSV="./final_results_20250724/selected_features_4.csv"
-STEP5_MODEL_FILEPATH="./dynamic_feature_models/iteration_4/class_4"
-STEP5_REVIEW_PT_FOLDER="./negtive_seg_select/protein_reps_mut_pt/test"
-STEP5_TRAIN_AUC_CSV="./final_results_20250724/best_model_performance_4.csv"
-STEP5_REVIEW_TENSORS="./negtive_seg_select/my_saved_tensors/3072/test_tensors.pt"
 
-STEP5_REVIEW_BATCH_SIZE=64
-STEP5_REVIEW_SCORE_CSV="final_protein_scores.csv"
-STEP5_REVIEW_SCORE_WITH_ID_CSV="final_protein_scores_with_uniprot.csv"
+TEST_DIR="${DATASET_ROOT}/test"
+
+TEST_TENSORS="${ENCODE_TEST_TENSORS}"
+TEST_PT_DIR="${ENCODE_TEST_PT_DIR}"
+
+TEST_SELECTED_FEATURES_DIR="${TRAIN_TEST_SELECTED_FEATURES_DIR}"
+TEST_MODEL_ROOT="${TRAIN_TEST_MODEL_DIR}"
+
+TEST_CLASS_IDS=(13)
+
+TEST_OUTPUT_DIR="${TEST_DIR}/outputs"
+
+
+# =============================================================================
+# new constitutive prediction
+#
+# Prediction for new constitutive proteins
+# =============================================================================
+
+PREDICTION_DIR="${DATASET_ROOT}/new_constitutive_prediction"
+PREDICTION_OUTPUT_DIR="${PREDICTION_DIR}/outputs"
+
+PREDICTION_SELECTED_FEATURES_CSV="${TRAIN_TEST_SELECTED_FEATURES_DIR}/selected_features_4.csv"
+
+PREDICTION_MODEL_FILEPATH="${TRAIN_TEST_MODEL_DIR}/iteration_4/class_4"
+
+PREDICTION_TRAIN_AUC_CSV="${TRAIN_TEST_METRICS_DIR}/best_model_performance_4.csv"
+
+PREDICTION_PT_FOLDER="${ENCODE_NEW_CONSTITUTIVE_PT_DIR}"
+
+PREDICTION_TENSORS="${PREDICTION_DIR}/tensors/test_tensors.pt"
+
+PREDICTION_BATCH_SIZE=64
+
+PREDICTION_SCORE_CSV="${PREDICTION_OUTPUT_DIR}/final_protein_scores.csv"
+
+PREDICTION_SCORE_WITH_ID_CSV="${PREDICTION_OUTPUT_DIR}/final_protein_scores_with_uniprot.csv"
