@@ -242,4 +242,3 @@ Add your license information here\.
 
 Add your contact information here\.
 
-> (Note: May contain AI-generated content.)
